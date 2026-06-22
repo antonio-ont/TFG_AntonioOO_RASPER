@@ -1,0 +1,181 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="rasper">
+
+  <!-- ============ PROPERTIES ============ -->
+  <xacro:property name="chassis_length" value="0.20"/>
+  <xacro:property name="chassis_width"  value="0.15"/>
+  <xacro:property name="chassis_height" value="0.06"/>
+  <xacro:property name="chassis_mass"   value="0.8"/>
+
+  <xacro:property name="wheel_radius"   value="0.033"/>
+  <xacro:property name="wheel_width"    value="0.02"/>
+  <xacro:property name="wheel_mass"     value="0.05"/>
+  <xacro:property name="wheel_offset_y" value="0.085"/>
+  <xacro:property name="wheel_offset_x" value="0.0"/>
+
+  <xacro:property name="caster_radius"  value="0.015"/>
+  <xacro:property name="caster_mass"    value="0.02"/>
+
+  <!-- ============ MATERIALS ============ -->
+  <material name="dark_gray">
+    <color rgba="0.2 0.2 0.2 1.0"/>
+  </material>
+  <material name="teal">
+    <color rgba="0.31 0.60 0.64 1.0"/>
+  </material>
+  <material name="black">
+    <color rgba="0.05 0.05 0.05 1.0"/>
+  </material>
+
+  <!-- ============ BASE FOOTPRINT (ground plane) ============ -->
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ============ BASE LINK (chassis) ============ -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <geometry>
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}"/>
+      </geometry>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+    </collision>
+    <inertial>
+      <mass value="${chassis_mass}"/>
+      <origin xyz="0 0 ${chassis_height/2}" rpy="0 0 0"/>
+      <inertia ixx="${(1/12)*chassis_mass*(chassis_width*chassis_width + chassis_height*chassis_height)}"
+               ixy="0" ixz="0"
+               iyy="${(1/12)*chassis_mass*(chassis_length*chassis_length + chassis_height*chassis_height)}"
+               iyz="0"
+               izz="${(1/12)*chassis_mass*(chassis_length*chassis_length + chassis_width*chassis_width)}"/>
+    </inertial>
+  </link>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+
+  <!-- ============ WHEEL MACRO ============ -->
+  <xacro:macro name="wheel" params="prefix y_offset">
+    <link name="${prefix}_wheel">
+      <visual>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="teal"/>
+      </visual>
+      <collision>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="${wheel_mass}"/>
+        <inertia ixx="${(1/12)*wheel_mass*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 ixy="0" ixz="0"
+                 iyy="${(1/12)*wheel_mass*(3*wheel_radius*wheel_radius + wheel_width*wheel_width)}"
+                 iyz="0"
+                 izz="${(1/2)*wheel_mass*wheel_radius*wheel_radius}"/>
+      </inertial>
+    </link>
+
+    <joint name="${prefix}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${prefix}_wheel"/>
+      <origin xyz="${wheel_offset_x} ${y_offset} 0" rpy="${-pi/2} 0 0"/>
+      <axis xyz="0 0 1"/>
+      <dynamics damping="0.01" friction="0.1"/>
+    </joint>
+
+    <gazebo reference="${prefix}_wheel">
+      <material>Gazebo/TurquoiseDark</material>
+      <mu1>1.0</mu1>
+      <mu2>1.0</mu2>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:wheel prefix="left"  y_offset="${wheel_offset_y}"/>
+  <xacro:wheel prefix="right" y_offset="${-wheel_offset_y}"/>
+
+  <!-- ============ CASTER WHEEL ============ -->
+  <link name="caster_wheel">
+    <visual>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <geometry>
+        <sphere radius="${caster_radius}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="${caster_mass}"/>
+      <inertia ixx="${(2/5)*caster_mass*caster_radius*caster_radius}"
+               ixy="0" ixz="0"
+               iyy="${(2/5)*caster_mass*caster_radius*caster_radius}"
+               iyz="0"
+               izz="${(2/5)*caster_mass*caster_radius*caster_radius}"/>
+    </inertial>
+  </link>
+
+  <joint name="caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="caster_wheel"/>
+    <origin xyz="${-chassis_length/2 + caster_radius + 0.01} 0 ${-(wheel_radius - caster_radius)}" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="caster_wheel">
+    <material>Gazebo/Black</material>
+    <mu1>0.0</mu1>
+    <mu2>0.0</mu2>
+  </gazebo>
+
+  <!-- ============ GAZEBO DIFF DRIVE PLUGIN ============ -->
+  <gazebo>
+    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+      <ros>
+        <namespace>/</namespace>
+      </ros>
+
+      <!-- Wheels -->
+      <left_joint>left_wheel_joint</left_joint>
+      <right_joint>right_wheel_joint</right_joint>
+
+      <!-- Kinematics -->
+      <wheel_separation>${2 * wheel_offset_y}</wheel_separation>
+      <wheel_diameter>${2 * wheel_radius}</wheel_diameter>
+
+      <!-- Limits -->
+      <max_wheel_torque>1.0</max_wheel_torque>
+      <max_wheel_acceleration>2.0</max_wheel_acceleration>
+
+      <!-- Input -->
+      <command_topic>cmd_vel</command_topic>
+
+      <!-- Output -->
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>true</publish_wheel_tf>
+
+      <odometry_topic>odom</odometry_topic>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+
+      <update_rate>30.0</update_rate>
+    </plugin>
+  </gazebo>
+
+</robot>

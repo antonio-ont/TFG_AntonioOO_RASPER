@@ -1,0 +1,14 @@
+{
+  "name": "RASPER — Robot Controller",
+  "short_name": "RASPER",
+  "description": "Control remoto para robot móvil ROS 2 con joystick virtual",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0a0a0f",
+  "background_color": "#0a0a0f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

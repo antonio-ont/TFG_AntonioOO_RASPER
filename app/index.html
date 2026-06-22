@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0e0d">
+<meta name="description" content="Control remoto para robot móvil ROS 2 con joystick virtual">
+<title>RASPER · Controller</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ===== RESET & TOKENS ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0e0d;--surface:#171614;--surface-2:#1c1b19;
+  --surface-off:#201f1d;--border:#393836;--border-hl:#4a4946;
+  --text:#cdccca;--text-m:#797876;--text-f:#5a5957;
+  --accent:#4f98a3;--accent-hover:#227f8b;
+  --green:#6daa45;--red:#d163a7;--orange:#bb653b;
+  --r:.5rem;--r-lg:.75rem;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+html{-webkit-font-smoothing:antialiased;touch-action:manipulation;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+
+/* ===== HEADER ===== */
+.header{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border);z-index:50}
+.logo{display:flex;align-items:center;gap:10px}
+.logo svg{width:24px;height:24px;color:var(--text-m)}
+.logo span{font-size:13px;font-weight:600;letter-spacing:.04em;font-family:var(--mono)}
+.header-r{display:flex;align-items:center;gap:8px}
+.status-pill{display:flex;align-items:center;gap:6px;padding:5px 12px;
+  border-radius:var(--r);background:var(--surface-2);border:1px solid var(--border);
+  font-size:11px;font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0;transition:background .3s}
+.dot.on{background:var(--green)}.dot.wait{background:var(--orange);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.gear-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+  border-radius:var(--r);color:var(--text-m);transition:all .2s var(--ease)}
+.gear-btn:hover,.gear-btn:active{background:var(--surface-off);color:var(--text)}
+
+/* ===== MAIN LAYOUT ===== */
+.main{flex:1;display:flex;flex-direction:column;gap:10px;padding:10px;overflow-y:auto;
+  -webkit-overflow-scrolling:touch}
+@media(min-width:640px) and (min-height:420px){
+  .main{flex-direction:row;align-items:stretch;padding:14px;gap:14px}
+}
+
+/* ===== CARDS ===== */
+.card{background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:14px;display:flex;flex-direction:column}
+.card-t{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--text-m);margin-bottom:10px}
+
+/* ===== JOYSTICK ===== */
+.joy-section{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px}
+.joy-wrap{position:relative;width:200px;height:200px;touch-action:none}
+.joy-base{width:100%;height:100%;border-radius:50%;
+  background:var(--surface-2);border:1px solid var(--border);position:relative}
+.joy-base::after{content:'';position:absolute;inset:38%;border-radius:50%;
+  border:1px dashed var(--border)}
+.joy-knob{width:60px;height:60px;border-radius:50%;position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  background:var(--accent);transition:background .2s;z-index:2}
+.joy-knob.active{background:var(--accent-hover)}
+.joy-axes{display:flex;gap:20px;margin-top:12px}
+.joy-ax{text-align:center}
+.joy-ax-label{font-size:9px;color:var(--text-f);text-transform:uppercase;letter-spacing:.06em}
+.joy-ax-val{font-family:var(--mono);font-size:18px;font-weight:600;color:var(--accent);margin-top:2px}
+
+/* ===== RIGHT PANEL ===== */
+.side{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media(min-width:640px) and (min-height:420px){.side{width:260px;flex-shrink:0}}
+
+/* ===== STOP BUTTON ===== */
+.stop-btn{width:100%;padding:14px;border-radius:var(--r);font-size:13px;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;
+  background:transparent;border:1px solid var(--red);color:var(--red);
+  transition:all .15s var(--ease);user-select:none}
+.stop-btn:active{background:var(--red);color:#fff;transform:scale(.97)}
+
+/* ===== SPEED SLIDERS ===== */
+.slider-row{display:flex;align-items:center;gap:10px}
+.slider-label{font-size:11px;color:var(--text-m);width:50px;flex-shrink:0}
+.slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+  background:var(--surface-off);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);cursor:pointer}
+.slider-val{font-family:var(--mono);font-size:13px;color:var(--accent);width:40px;text-align:right;flex-shrink:0}
+
+/* ===== TELEMETRY ===== */
+.telem{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.telem-item{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:10px}
+.telem-l{font-size:9px;color:var(--text-f);text-transform:uppercase;letter-spacing:.06em}
+.telem-v{font-family:var(--mono);font-size:20px;font-weight:700;margin-top:2px}
+.telem-u{font-size:10px;color:var(--text-f);margin-left:2px}
+
+/* ===== LOG ===== */
+.log{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);
+  padding:10px;height:80px;overflow-y:auto;font-family:var(--mono);font-size:10px;
+  color:var(--text-m);display:flex;flex-direction:column;gap:1px}
+.log .i{color:var(--accent)}.log .w{color:var(--orange)}.log .e{color:var(--red)}.log .ok{color:var(--green)}
+
+/* ===== SETTINGS DRAWER ===== */
+.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:90;
+  opacity:0;pointer-events:none;transition:opacity .25s}
+.drawer-bg.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:-320px;width:300px;max-width:85vw;height:100%;z-index:100;
+  background:var(--surface);border-left:1px solid var(--border);padding:20px;
+  display:flex;flex-direction:column;gap:16px;transition:right .3s var(--ease);overflow-y:auto}
+.drawer-bg.open .drawer{right:0}
+.drawer h3{font-size:14px;font-weight:600}
+.drawer label{font-size:11px;color:var(--text-m);display:block;margin-bottom:4px}
+.drawer input[type="text"]{width:100%;padding:8px 12px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--r);color:var(--text);
+  font-family:var(--mono);font-size:13px;outline:none}
+.drawer input[type="text"]:focus{border-color:var(--accent)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field-row{display:flex;gap:8px}
+.field-row .field{flex:1}
+.drawer .btn-connect{width:100%;padding:10px;border-radius:var(--r);font-size:13px;font-weight:600;
+  background:var(--accent);color:#fff;transition:all .15s}
+.drawer .btn-connect:active{transform:scale(.97)}
+.drawer .btn-disconnect{background:transparent;border:1px solid var(--red);color:var(--red)}
+.close-x{align-self:flex-end;width:32px;height:32px;display:flex;align-items:center;
+  justify-content:center;border-radius:var(--r);color:var(--text-m);font-size:18px}
+.close-x:active{background:var(--surface-off)}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="4" y="10" width="24" height="16" rx="3"/><rect x="10" y="4" width="12" height="8" rx="2"/>
+      <circle cx="11" cy="20" r="2.5" fill="currentColor" stroke="none"/>
+      <circle cx="21" cy="20" r="2.5" fill="currentColor" stroke="none"/>
+    </svg>
+    <span>RASPER</span>
+  </div>
+  <div class="header-r">
+    <div class="status-pill"><span class="dot" id="dot"></span><span id="statusTxt">Desconectado</span><span id="pingTxt" style="color:var(--text-m);font-family:var(--mono);margin-left:4px"></span></div>
+    <button class="gear-btn" onclick="toggleDrawer()" aria-label="Ajustes">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- JOYSTICK -->
+  <div class="card joy-section">
+    <div class="card-t">Joystick</div>
+    <div class="joy-wrap" id="joyWrap">
+      <div class="joy-base" id="joyBase">
+        <div class="joy-knob" id="joyKnob"></div>
+      </div>
+    </div>
+    <div class="joy-axes">
+      <div class="joy-ax"><div class="joy-ax-label">Linear</div><div class="joy-ax-val" id="axLinear">0.00</div></div>
+      <div class="joy-ax"><div class="joy-ax-label">Angular</div><div class="joy-ax-val" id="axAngular">0.00</div></div>
+    </div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div class="side">
+    <button class="stop-btn" id="stopBtn" ontouchstart="eStop();event.preventDefault()" onclick="eStop()">⬛ Parada de emergencia</button>
+
+    <div class="card">
+      <div class="card-t">Velocidad máxima</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="slider-row">
+          <span class="slider-label">Lineal</span>
+          <input type="range" class="slider" id="sLin" min="0.05" max="1.5" step="0.05" value="0.50"
+            oninput="document.getElementById('vLin').textContent=parseFloat(this.value).toFixed(2)">
+          <span class="slider-val" id="vLin">0.50</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Angular</span>
+          <input type="range" class="slider" id="sAng" min="0.1" max="3.0" step="0.1" value="1.00"
+            oninput="document.getElementById('vAng').textContent=parseFloat(this.value).toFixed(2)">
+          <span class="slider-val" id="vAng">1.00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-t">Comando activo</div>
+      <div class="telem">
+        <div class="telem-item"><div class="telem-l">linear.x</div><div class="telem-v"><span id="tLin">0.00</span><span class="telem-u">m/s</span></div></div>
+        <div class="telem-item"><div class="telem-l">angular.z</div><div class="telem-v"><span id="tAng">0.00</span><span class="telem-u">rad/s</span></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-t" style="margin:0">Latencia (RTT)</div>
+        <span id="pingVal" style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600">-- ms</span>
+      </div>
+      <div style="position:relative;height:50px;width:100%">
+        <canvas id="latChart" style="width:100%;height:100%;display:block"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1;min-height:0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-t" style="margin:0">Log</div>
+        <button style="font-size:10px;color:var(--text-f);padding:2px 8px;border-radius:6px;background:var(--surface)" onclick="clearLog()">Limpiar</button>
+      </div>
+      <div class="log" id="logBox"><div class="i">→ Abre ajustes ⚙ para conectar</div></div>
+    </div>
+  </div>
+</main>
+
+<!-- SETTINGS DRAWER -->
+<div class="drawer-bg" id="drawerBg" onclick="closeDrawer()">
+  <div class="drawer" onclick="event.stopPropagation()">
+    <button class="close-x" onclick="closeDrawer()">✕</button>
+    <h3>Conexión ROS Bridge</h3>
+    <div class="field-row">
+      <div class="field"><label>Host / IP</label><input type="text" id="inHost" value="raspberrypi.local"></div>
+      <div class="field" style="max-width:80px"><label>Puerto</label><input type="text" id="inPort" value="9090"></div>
+    </div>
+    <div class="field"><label>Tópico cmd_vel</label><input type="text" id="inTopic" value="/cmd_vel"></div>
+    <button class="btn-connect" id="btnConn" onclick="toggleConn()">Conectar</button>
+    <h3 style="margin-top:8px">Opciones</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)">
+      <input type="checkbox" id="chkHaptic" checked> Vibración háptica
+    </label>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+let ws=null,connected=false,joyActive=false,joyTouchId=null,pubTimer=null,pingTimer=null,pingTimes={},rttHistory=[];
+
+// ===== DRAWER =====
+function toggleDrawer(){document.getElementById('drawerBg').classList.toggle('open')}
+function closeDrawer(){document.getElementById('drawerBg').classList.remove('open')}
+
+// ===== LOG =====
+function log(m,t='i'){const b=document.getElementById('logBox'),
+  ts=new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
+  d=document.createElement('div');d.className=t;d.textContent=`[${ts}] ${m}`;b.appendChild(d);b.scrollTop=b.scrollHeight}
+function clearLog(){document.getElementById('logBox').innerHTML=''}
+
+// ===== CONNECTION =====
+function setStatus(s){const d=document.getElementById('dot'),t=document.getElementById('statusTxt'),b=document.getElementById('btnConn');
+  d.className='dot';if(s==='on'){d.classList.add('on');t.textContent='Conectado';b.textContent='Desconectar';b.classList.add('btn-disconnect')}
+  else if(s==='wait'){d.classList.add('wait');t.textContent='Conectando...';b.textContent='Cancelar';b.classList.remove('btn-disconnect')}
+  else{t.textContent='Desconectado';b.textContent='Conectar';b.classList.remove('btn-disconnect')}}
+
+function toggleConn(){if(connected||ws){disc()}else{conn()}}
+function conn(){
+  const h=document.getElementById('inHost').value.trim()||'localhost',
+    p=document.getElementById('inPort').value.trim()||'9090',url=`ws://${h}:${p}`;
+  log(`Conectando a ${url}...`);setStatus('wait');
+  try{ws=new WebSocket(url);
+    ws.onopen=()=>{connected=true;setStatus('on');log('Conexión establecida','ok');adv();closeDrawer();startPing()};
+    ws.onclose=()=>{connected=false;ws=null;setStatus('off');log('Conexión cerrada','w');stopPub();stopPing()};
+    ws.onerror=()=>{log('Error WebSocket — ¿rosbridge activo?','e');setStatus('off');ws=null;connected=false;stopPing()};
+    ws.onmessage=(event)=>{
+      try {
+        const data = JSON.parse(event.data);
+        if (data.op === 'service_response' && data.id && data.id.startsWith('ping_')) {
+          const sendTime = pingTimes[data.id];
+          if (sendTime) {
+            const rtt = performance.now() - sendTime;
+            delete pingTimes[data.id];
+            
+            // Actualizar indicadores numéricos
+            document.getElementById('pingTxt').textContent = ` · ${Math.round(rtt)} ms`;
+            document.getElementById('pingVal').textContent = `${Math.round(rtt)} ms`;
+            
+            // Registrar histórico y redibujar gráfica
+            rttHistory.push(rtt);
+            if (rttHistory.length > 30) rttHistory.shift();
+            drawChart();
+          }
+        }
+      } catch(e) {}
+    };
+  }catch(e){log('URL inválida','e');setStatus('off')}
+}
+function disc(){if(ws)ws.close();connected=false;ws=null;setStatus('off')}
+function adv(){if(!ws||ws.readyState!==1)return;const tp=document.getElementById('inTopic').value||'/cmd_vel';
+  ws.send(JSON.stringify({op:'advertise',topic:tp,type:'geometry_msgs/Twist'}));log(`Tópico ${tp} listo`,'ok')}
+
+// ===== PING (RTT LATENCY) =====
+function startPing(){
+  stopPing();
+  pingTimer = setInterval(() => {
+    if (!ws || ws.readyState !== 1) return;
+    const id = "ping_" + Math.random().toString(36).substring(2, 9);
+    pingTimes[id] = performance.now();
+    ws.send(JSON.stringify({
+      op: "call_service",
+      id: id,
+      service: "/rosapi/get_time"
+    }));
+  }, 1000); // Ping cada segundo para actualizar la gráfica de forma fluida
+}
+function stopPing(){
+  if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+  document.getElementById('pingTxt').textContent = '';
+  document.getElementById('pingVal').textContent = '-- ms';
+  rttHistory = [];
+  drawChart();
+}
+
+// ===== REAL-TIME CHART =====
+function drawChart() {
+  const canvas = document.getElementById('latChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  canvas.width = w * window.devicePixelRatio;
+  canvas.height = h * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  
+  ctx.clearRect(0, 0, w, h);
+  
+  // Rejilla sutil (guías horizontales a 20ms, 50ms y 100ms)
+  ctx.strokeStyle = '#201f1d';
+  ctx.lineWidth = 1;
+  [20, 50, 100].forEach(ms => {
+    const y = h - (ms / 120) * h;
+    if (y > 0 && y < h) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+  });
+  
+  if (rttHistory.length === 0) return;
+  
+  // Dibujar línea de latencia
+  ctx.strokeStyle = '#4f98a3';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const step = w / 29;
+  rttHistory.forEach((val, i) => {
+    const x = i * step;
+    const clamped = Math.min(val, 120);
+    const y = h - (clamped / 120) * h;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  
+  // Relleno degradado debajo de la curva
+  ctx.lineTo((rttHistory.length - 1) * step, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(79, 152, 163, 0.2)');
+  grad.addColorStop(1, 'rgba(79, 152, 163, 0.0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+// ===== PUBLISH =====
+function pub(lx,az){
+  document.getElementById('tLin').textContent=lx.toFixed(2);
+  document.getElementById('tAng').textContent=az.toFixed(2);
+  if(!ws||ws.readyState!==1)return;const tp=document.getElementById('inTopic').value||'/cmd_vel';
+  ws.send(JSON.stringify({op:'publish',topic:tp,msg:{linear:{x:lx,y:0,z:0},angular:{x:0,y:0,z:az}}}))
+}
+
+// ===== HAPTIC =====
+function haptic(ms){if(document.getElementById('chkHaptic').checked&&navigator.vibrate)navigator.vibrate(ms)}
+
+// ===== JOYSTICK =====
+const joyWrap=document.getElementById('joyWrap'),joyKnob=document.getElementById('joyKnob'),
+      joyBase=document.getElementById('joyBase');
+
+function getJoyCenter(){const r=joyBase.getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2,radius:r.width/2}}
+
+function handleJoyMove(cx,cy){
+  const c=getJoyCenter(),dx=cx-c.x,dy=cy-c.y,dist=Math.sqrt(dx*dx+dy*dy),
+    maxR=c.radius-32,clamped=Math.min(dist,maxR),angle=Math.atan2(dy,dx),
+    nx=clamped*Math.cos(angle),ny=clamped*Math.sin(angle);
+  joyKnob.style.transform=`translate(calc(-50% + ${nx}px),calc(-50% + ${ny}px))`;
+  const normX=nx/maxR,normY=-ny/maxR; // Y invertido: arriba=positivo
+  const lin=normY*parseFloat(document.getElementById('sLin').value),
+        ang=(-normX)*parseFloat(document.getElementById('sAng').value);
+  document.getElementById('axLinear').textContent=lin.toFixed(2);
+  document.getElementById('axAngular').textContent=ang.toFixed(2);
+  return{lin,ang}
+}
+
+function startPub(lx,az){stopPub();pub(lx,az);pubTimer=setInterval(()=>pub(lx,az),100)}
+function stopPub(){if(pubTimer){clearInterval(pubTimer);pubTimer=null}pub(0,0);
+  document.getElementById('axLinear').textContent='0.00';document.getElementById('axAngular').textContent='0.00'}
+
+function resetKnob(){joyKnob.style.transform='translate(-50%,-50%)';joyKnob.classList.remove('active');stopPub()}
+
+// Touch events
+joyWrap.addEventListener('touchstart',e=>{if(joyActive)return;e.preventDefault();
+  const t=e.changedTouches[0];joyTouchId=t.identifier;joyActive=true;joyKnob.classList.add('active');haptic(15);
+  const v=handleJoyMove(t.clientX,t.clientY);startPub(v.lin,v.ang)},{passive:false});
+
+joyWrap.addEventListener('touchmove',e=>{if(!joyActive)return;e.preventDefault();
+  for(const t of e.changedTouches){if(t.identifier===joyTouchId){
+    const v=handleJoyMove(t.clientX,t.clientY);if(pubTimer)clearInterval(pubTimer);
+    pub(v.lin,v.ang);pubTimer=setInterval(()=>pub(v.lin,v.ang),100);break}}},{passive:false});
+
+joyWrap.addEventListener('touchend',e=>{for(const t of e.changedTouches){
+  if(t.identifier===joyTouchId){joyActive=false;joyTouchId=null;resetKnob();break}}});
+joyWrap.addEventListener('touchcancel',()=>{joyActive=false;joyTouchId=null;resetKnob()});
+
+// Mouse events (for desktop testing)
+let mouseDown=false;
+joyWrap.addEventListener('mousedown',e=>{mouseDown=true;joyKnob.classList.add('active');
+  const v=handleJoyMove(e.clientX,e.clientY);startPub(v.lin,v.ang)});
+window.addEventListener('mousemove',e=>{if(!mouseDown)return;
+  const v=handleJoyMove(e.clientX,e.clientY);if(pubTimer)clearInterval(pubTimer);
+  pub(v.lin,v.ang);pubTimer=setInterval(()=>pub(v.lin,v.ang),100)});
+window.addEventListener('mouseup',()=>{if(mouseDown){mouseDown=false;resetKnob()}});
+
+// ===== EMERGENCY STOP =====
+function eStop(){stopPub();pub(0,0);haptic(200);log('PARADA DE EMERGENCIA','w');if(ws)ws.close()}
+
+// ===== KEYBOARD (desktop) =====
+const km={'ArrowUp':'fwd','ArrowDown':'bwd','ArrowLeft':'left','ArrowRight':'right'};
+let kActive=null;
+document.addEventListener('keydown',e=>{
+  if(e.key===' '){e.preventDefault();eStop();return}
+  if(km[e.key]&&!e.repeat){e.preventDefault();kActive=km[e.key];
+    const l=parseFloat(document.getElementById('sLin').value),a=parseFloat(document.getElementById('sAng').value);
+    const map={fwd:[l,0],bwd:[-l,0],left:[0,a],right:[0,-a]};
+    const v=map[kActive];startPub(v[0],v[1])}});
+document.addEventListener('keyup',e=>{if(km[e.key]&&km[e.key]===kActive){kActive=null;stopPub()}});
+
+// ===== SERVICE WORKER =====
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{})}
+</script>
+</body>
+</html>
